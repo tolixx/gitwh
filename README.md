@@ -1,6 +1,7 @@
 # GitWH - Git WebHook Server
 
 A lightweight webhook server written in Go that automatically pulls Git repositories when receiving push notifications from GitHub or GitLab.
+This software provides only one function - updates local copy ( using git pull ) of git repository.
 
 ## Features
 
@@ -26,7 +27,13 @@ A lightweight webhook server written in Go that automatically pulls Git reposito
 go install
 ```
 
-This command compiles and installs binary into default go bin path.
+This command compiles and installs binary into default go bin path. You should add this path to your PATH variable before run install script.
+Or you could build binary by command
+
+```bash
+go build -o <path_to_binary>/gitwh
+```
+It's necessary to add <path_to_binary> to your PATH environment variable.
 
 ### Service Installation
 
@@ -58,6 +65,10 @@ repos:
       - "/path/to/local/repo"
       - "/path/to/another/repo"
 ```
+
+my-repo - name of your repository. In case of https://github.com/tolixx/gitwh it is gitwh.
+folders - path to your local copy of this repo.
+
 
 ### JSON Configuration Example
 
