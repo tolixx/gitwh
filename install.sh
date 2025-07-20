@@ -40,6 +40,17 @@ if [[ ! -f "$SERVICE_FILE" ]]; then
     exit 1
 fi
 
+# Detect binary path
+BINARY_PATH=$(which gitwh)
+if [[ -z "$BINARY_PATH" ]]; then
+    print_error "gitwh binary not found in PATH. Please ensure gitwh is installed and in your PATH."
+    exit 1
+fi
+
+BINARY_DIR=$(dirname "$BINARY_PATH")
+print_status "Detected gitwh binary at: $BINARY_PATH"
+print_status "Binary directory: $BINARY_DIR"
+
 # Check if config file exists
 if [[ ! -f "$CONFIG_FILE" ]]; then
     print_error "Config file '$CONFIG_FILE' not found in current directory."
@@ -49,12 +60,17 @@ fi
 print_status "Found service file: $SERVICE_FILE"
 print_status "Found config file: $CONFIG_FILE"
 
-# Step 1: Copy the service file to systemd directory
-print_status "Copying service file to /etc/systemd/system/..."
-if sudo cp "$SERVICE_FILE" /etc/systemd/system/; then
-    print_status "Service file copied successfully"
+# Step 1: Create service file with correct binary path and copy to systemd directory
+print_status "Creating service file with binary path and copying to /etc/systemd/system/..."
+TEMP_SERVICE_FILE="/tmp/${SERVICE_FILE}.tmp"
+sed "s|__BINARY_DIR__|${BINARY_DIR}|g" "$SERVICE_FILE" > "$TEMP_SERVICE_FILE"
+
+if sudo cp "$TEMP_SERVICE_FILE" "/etc/systemd/system/$SERVICE_FILE"; then
+    print_status "Service file copied successfully with binary path: $BINARY_DIR"
+    rm -f "$TEMP_SERVICE_FILE"
 else
     print_error "Failed to copy service file"
+    rm -f "$TEMP_SERVICE_FILE"
     exit 1
 fi
 
