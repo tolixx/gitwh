@@ -5,8 +5,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/go/bin/
-ExecStart=/root/go/bin/gitwh
+WorkingDirectory=__BINARY_DIR__
+ExecStart=__BINARY_DIR__/gitwh
 Restart=on-abort
 
 [Install]

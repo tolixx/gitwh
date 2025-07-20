@@ -23,8 +23,10 @@ A lightweight webhook server written in Go that automatically pulls Git reposito
 ### Building
 
 ```bash
-go build -o gitwh
+go install
 ```
+
+This command compiles and installs binary into default go bin path.
 
 ### Service Installation
 
