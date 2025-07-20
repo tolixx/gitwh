@@ -1,0 +1,13 @@
+[Unit]
+Description=Webhook Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/go/bin/
+ExecStart=/root/go/bin/gitwh
+Restart=on-abort
+
+[Install]
+WantedBy=multiuser.target
