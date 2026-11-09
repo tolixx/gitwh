@@ -14,7 +14,9 @@ const defaultTimeout = 10
 
 // Repo represents repository
 type Repo struct {
-	Secret  string   `json:"secret" yaml:"secret"`
+	Secret string `json:"secret" yaml:"secret"`
+	// Branch, when set, limits pulls to pushes on this branch
+	Branch  string   `json:"branch" yaml:"branch"`
 	Folders []string `json:"folders" yaml:"folders"`
 }
 
@@ -53,9 +55,13 @@ func FromFile(path string) (*Config, error) {
 	ext := filepath.Ext(path)
 	switch ext {
 	case ".json", ".conf":
-		dec = json.NewDecoder(f)
+		d := json.NewDecoder(f)
+		d.DisallowUnknownFields()
+		dec = d
 	case ".yaml", ".yml":
-		dec = yaml.NewDecoder(f)
+		d := yaml.NewDecoder(f)
+		d.KnownFields(true)
+		dec = d
 	}
 
 	if dec == nil {
@@ -65,5 +71,23 @@ func FromFile(path string) (*Config, error) {
 	if err := dec.Decode(cfg); err != nil {
 		return nil, fmt.Errorf("failed to decode config file: %v", err)
 	}
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
 	return cfg, nil
+}
+
+func (c *Config) validate() error {
+	if c.Timeout <= 0 {
+		return fmt.Errorf("timeout must be a positive number of seconds, got %d", c.Timeout)
+	}
+	if c.BufferSize < 0 {
+		return fmt.Errorf("buffer_size must not be negative, got %d", c.BufferSize)
+	}
+	for name, repo := range c.Repos {
+		if len(repo.Folders) == 0 {
+			return fmt.Errorf("repo %q has no folders", name)
+		}
+	}
+	return nil
 }

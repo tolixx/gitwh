@@ -99,7 +99,7 @@ func TestGithubPayload(t *testing.T) {
 	req := httptest.NewRequest("POST", "/wh", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	
-	result, err := h.githubPayload(req)
+	result, err := h.getPayload(req)
 	if err != nil {
 		t.Fatalf("githubPayload failed: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestGitlabPayload(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Gitlab-Token", "gitlab-secret")
 	
-	result, err := h.gitlabPayload(req)
+	result, err := h.getPayload(req)
 	if err != nil {
 		t.Fatalf("gitlabPayload failed: %v", err)
 	}
@@ -224,9 +224,13 @@ func TestGitlabPayloadNoCommits(t *testing.T) {
 	req := httptest.NewRequest("POST", "/wh", bytes.NewReader(payloadBytes))
 	req.Header.Set("Content-Type", "application/json")
 	
-	_, err := h.gitlabPayload(req)
-	if err == nil {
-		t.Error("Expected error for payload with no commits")
+	// A branch delete has no commits: still a valid delivery
+	result, err := h.getPayload(req)
+	if err != nil {
+		t.Fatalf("Expected no error for payload with no commits, got %v", err)
+	}
+	if result.Repo != "gitlab-repo" {
+		t.Errorf("Expected Repo gitlab-repo, got %s", result.Repo)
 	}
 }
 

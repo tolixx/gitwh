@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"gitwh/config"
 	"gitwh/handlers"
@@ -24,11 +25,16 @@ func main() {
 	fmt.Printf("Webhook Server, config - %s\n", *configPath)
 	fmt.Printf("%d repo(s), BufferSize: %d, Timeout: %d\n", len(cfg.Repos), cfg.BufferSize, cfg.Timeout)
 
-	http.Handle("/", newHandler(cfg))
-
-	if err := http.ListenAndServe(cfg.Listen, nil); err != nil {
-		fmt.Printf("Failed to ListenAndServe : %v", err)
+	srv := &http.Server{
+		Addr:              cfg.Listen,
+		Handler:           newHandler(cfg),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
+
+	log.Fatalf("Failed to ListenAndServe: %v", srv.ListenAndServe())
 }
 
 func newHandler(cfg *config.Config) http.Handler {

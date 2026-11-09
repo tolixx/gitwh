@@ -4,10 +4,11 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+User=__SERVICE_USER__
 WorkingDirectory=__BINARY_DIR__
 ExecStart=__BINARY_DIR__/gitwh
-Restart=on-abort
+Restart=on-failure
+RestartSec=5
 
 [Install]
-WantedBy=multiuser.target
+WantedBy=multi-user.target

@@ -45,8 +45,14 @@ Use the provided installation script to set up the service:
 
 This script will:
 - Copy the service file to `/etc/systemd/system/`
-- Copy the configuration file to `/etc/gitwh.yaml`
+- Copy the configuration file to `/etc/gitwh.yaml` (mode 640, it holds the secrets)
 - Enable and start the systemd service
+
+The service runs `git pull` as the user who ran the script (`$SUDO_USER` under sudo). That user must own the repo folders, git refuses to pull in a repo owned by someone else. To pick another user:
+
+```bash
+SERVICE_USER=deploy ./install.sh
+```
 
 ## Configuration
 
@@ -61,6 +67,7 @@ timeout: 10
 repos:
   my-repo:
     secret: "optional-webhook-secret"
+    branch: "main"
     folders:
       - "/path/to/local/repo"
       - "/path/to/another/repo"
@@ -90,10 +97,20 @@ folders - path to your local copy of this repo.
 
 - `listen`: Server listening address and port (default: `:8080`)
 - `buffer_size`: Event buffer size for concurrent requests (default: `3`)
-- `timeout`: Git pull timeout in seconds (default: `10`)
+- `timeout`: Git pull timeout in seconds, must be positive (default: `10`)
 - `repos`: Map of repository configurations
-  - `secret`: Optional webhook secret for validation
-  - `folders`: Array of local repository paths to pull
+  - `secret`: Optional webhook secret, the same value you enter in GitHub or GitLab (see Secrets below)
+  - `branch`: Optional. Pull only on pushes to this branch, ignore the rest
+  - `folders`: Array of local repository paths to pull, at least one
+
+Unknown keys are an error, so a typo like `folder:` fails at startup instead of being ignored.
+
+### Secrets
+
+- **GitHub** never sends the secret itself. It signs the body with it and sends the signature in `X-Hub-Signature-256`; gitwh checks that signature. Both content types (`application/json` and `application/x-www-form-urlencoded`) work.
+- **GitLab** sends the secret token as is in `X-Gitlab-Token`; gitwh compares it.
+
+Without a secret anyone who can reach `/wh` and knows the repo name can trigger a pull. Set one if the port is reachable from the internet.
 
 ## Usage
 
@@ -137,15 +154,16 @@ sudo journalctl -u gitwh.service -f
 ## How It Works
 
 1. **Webhook Reception**: The server listens for HTTP POST requests on the `/wh` endpoint
-2. **Payload Processing**: Automatically detects and parses GitHub or GitLab webhook payloads
-3. **Repository Validation**: Checks if the repository is configured and validates secrets if provided
-4. **Git Pull**: Executes `git pull` on configured local repository paths
-5. **Concurrency Control**: Uses per-directory mutex locks to prevent concurrent pulls on the same repository
+2. **Payload Processing**: Tells GitHub from GitLab by the `X-GitHub-Event` / `X-Gitlab-Event` header and parses the payload
+3. **Repository Validation**: Checks that the repository is configured and verifies the signature or token if a secret is set
+4. **Filtering**: Pings, non-push events, tag pushes and pushes to other branches (when `branch` is set) get `202` and no pull
+5. **Git Pull**: Executes `git pull` on configured local repository paths, git output goes to the log on failure
+6. **Concurrency Control**: At most one pull per folder at a time. Pushes that arrive during a pull collapse into one follow-up pull
 
 ## API Endpoints
 
 - `GET /`: Returns 404 Not Found
-- `POST /wh`: Webhook endpoint for GitHub/GitLab push events
+- `POST /wh`: Webhook endpoint for GitHub/GitLab push events. `200` pull queued, `202` delivery accepted but ignored, `400` unknown repo, bad payload or bad secret
 
 ## Architecture
 
@@ -159,8 +177,9 @@ The application is structured into several packages:
 
 ## Security
 
-- Secret validation for webhook requests
-- Configurable timeouts to prevent hanging operations
+- GitHub HMAC signature and GitLab token validation, constant-time comparison
+- Request body limit and HTTP server timeouts
+- Configurable git timeouts, git never waits for a password prompt
 - Mutex-based concurrency control to prevent race conditions
 - Minimal attack surface with only one webhook endpoint
 
