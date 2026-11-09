@@ -71,6 +71,8 @@ repos:
     folders:
       - "/path/to/local/repo"
       - "/path/to/another/repo"
+    after_pull: "bash tools/deploy.sh apply"
+    after_pull_timeout: 300
 ```
 
 my-repo - name of your repository. In case of https://github.com/tolixx/gitwh it is gitwh.
@@ -102,8 +104,21 @@ folders - path to your local copy of this repo.
   - `secret`: Optional webhook secret, the same value you enter in GitHub or GitLab (see Secrets below)
   - `branch`: Optional. Pull only on pushes to this branch, ignore the rest
   - `folders`: Array of local repository paths to pull, at least one
+  - `after_pull`: Optional shell command run after a pull (see After pull below)
+  - `after_pull_timeout`: Seconds before the command is killed (default: `300`)
 
 Unknown keys are an error, so a typo like `folder:` fails at startup instead of being ignored.
+
+### After pull
+
+`after_pull` runs with `/bin/sh -c` in each folder of the repo, as the service user, after a `git pull` that moved `HEAD`. A relative path like `tools/deploy.sh` points into the pulled repo.
+
+- It does not run when the pull failed or brought nothing new. A redelivery of the same push will not rerun a failed command: push a new commit or run it by hand.
+- It runs in the folder's worker, so the next pull of that folder waits for it.
+- Environment: `GITWH_REPO`, `GITWH_FOLDER`, `GITWH_OLD_HEAD`, `GITWH_NEW_HEAD`, plus the service's own.
+- Output (the last 8 KB) and the exit status go to the log. On timeout the whole process group is killed, children included.
+- Nothing from the webhook payload reaches the command, it is taken from the config only.
+- A folder may get `after_pull` from one repo only.
 
 ### Secrets
 
@@ -158,7 +173,8 @@ sudo journalctl -u gitwh.service -f
 3. **Repository Validation**: Checks that the repository is configured and verifies the signature or token if a secret is set
 4. **Filtering**: Pings, non-push events, tag pushes and pushes to other branches (when `branch` is set) get `202` and no pull
 5. **Git Pull**: Executes `git pull` on configured local repository paths, git output goes to the log on failure
-6. **Concurrency Control**: At most one pull per folder at a time. Pushes that arrive during a pull collapse into one follow-up pull
+6. **After Pull**: Runs the repo's `after_pull` command in the folder if the pull brought new commits
+7. **Concurrency Control**: At most one pull per folder at a time. Pushes that arrive during a pull collapse into one follow-up pull
 
 ## API Endpoints
 

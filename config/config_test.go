@@ -208,3 +208,19 @@ func TestSampleConfigs(t *testing.T) {
 		}
 	}
 }
+
+func TestFromFileAfterPull(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "c.yaml")
+	body := "repos:\n  r:\n    folders: [/srv/r]\n    after_pull: bash tools/deploy.sh apply\n    after_pull_timeout: 60\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := FromFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := cfg.Repos["r"]
+	if r.AfterPull != "bash tools/deploy.sh apply" || r.AfterPullTimeout != 60 {
+		t.Errorf("got %+v", r)
+	}
+}

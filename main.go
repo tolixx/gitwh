@@ -24,6 +24,11 @@ func main() {
 
 	fmt.Printf("Webhook Server, config - %s\n", *configPath)
 	fmt.Printf("%d repo(s), BufferSize: %d, Timeout: %d\n", len(cfg.Repos), cfg.BufferSize, cfg.Timeout)
+	for name, repo := range cfg.Repos {
+		if repo.AfterPull != "" {
+			fmt.Printf("%s: after_pull %q\n", name, repo.AfterPull)
+		}
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,
@@ -38,5 +43,23 @@ func main() {
 }
 
 func newHandler(cfg *config.Config) http.Handler {
-	return handlers.New(cfg.Repos, cfg.BufferSize, git.New(cfg.Timeout))
+	return handlers.New(cfg.Repos, cfg.BufferSize, git.NewWithHooks(cfg.Timeout, hooks(cfg)))
+}
+
+// hooks maps every folder of a repo with after_pull to its command
+func hooks(cfg *config.Config) map[string]git.Hook {
+	m := make(map[string]git.Hook)
+	for name, repo := range cfg.Repos {
+		if repo.AfterPull == "" {
+			continue
+		}
+		timeout := repo.AfterPullTimeout
+		if timeout == 0 {
+			timeout = config.DefaultAfterPullTimeout
+		}
+		for _, folder := range repo.Folders {
+			m[folder] = git.Hook{Repo: name, Command: repo.AfterPull, Timeout: time.Duration(timeout) * time.Second}
+		}
+	}
+	return m
 }
