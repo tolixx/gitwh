@@ -1,6 +1,8 @@
 {
-    "listen" : ":8080",
-    "repos" : {
-	    "repo-name" : ["repo-path"]
+    "listen": ":8080",
+    "repos": {
+        "repo-name": {
+            "folders": ["repo-path"]
+        }
     }
 }

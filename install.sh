@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to install gitwh.service to systemd
-# Usage: ./install_gitwh_service.sh
+# Usage: ./install.sh  (or SERVICE_USER=deploy ./install.sh)
 
 SERVICE_FILE="gitwh.service"
 SERVICE_NAME="gitwh"
@@ -48,6 +48,11 @@ if [[ -z "$BINARY_PATH" ]]; then
 fi
 
 BINARY_DIR=$(dirname "$BINARY_PATH")
+
+# The service runs git pull as this user, so it must own the repo folders.
+# Override with SERVICE_USER=deploy ./install.sh
+SERVICE_USER="${SERVICE_USER:-${SUDO_USER:-$(id -un)}}"
+print_status "Service user: $SERVICE_USER"
 print_status "Detected gitwh binary at: $BINARY_PATH"
 print_status "Binary directory: $BINARY_DIR"
 
@@ -62,8 +67,8 @@ print_status "Found config file: $CONFIG_FILE"
 
 # Step 1: Create service file with correct binary path and copy to systemd directory
 print_status "Creating service file with binary path and copying to /etc/systemd/system/..."
-TEMP_SERVICE_FILE="/tmp/${SERVICE_FILE}.tmp"
-sed "s|__BINARY_DIR__|${BINARY_DIR}|g" "$SERVICE_FILE" > "$TEMP_SERVICE_FILE"
+TEMP_SERVICE_FILE=$(mktemp)
+sed -e "s|__BINARY_DIR__|${BINARY_DIR}|g" -e "s|__SERVICE_USER__|${SERVICE_USER}|g" "$SERVICE_FILE" > "$TEMP_SERVICE_FILE"
 
 if sudo cp "$TEMP_SERVICE_FILE" "/etc/systemd/system/$SERVICE_FILE"; then
     print_status "Service file copied successfully with binary path: $BINARY_DIR"
@@ -92,9 +97,9 @@ else
     exit 1
 fi
 
-# Set proper permissions for config file
+# The config holds webhook secrets: readable by the service user only
 print_status "Setting proper permissions for config file..."
-if sudo chmod 644 "$CONFIG_DEST"; then
+if sudo chown "root:$(id -gn "$SERVICE_USER")" "$CONFIG_DEST" && sudo chmod 640 "$CONFIG_DEST"; then
     print_status "Config file permissions set successfully"
 else
     print_error "Failed to set config file permissions"
@@ -110,7 +115,7 @@ else
     exit 1
 fi
 
-# Step 4: Enable the service
+# Step 5: Enable the service
 print_status "Enabling $SERVICE_NAME service..."
 if sudo systemctl enable "$SERVICE_NAME.service"; then
     print_status "Service enabled successfully"
@@ -119,7 +124,7 @@ else
     exit 1
 fi
 
-# Step 5: Start the service
+# Step 6: Start the service
 print_status "Starting $SERVICE_NAME service..."
 if sudo systemctl start "$SERVICE_NAME.service"; then
     print_status "Service started successfully"
@@ -128,7 +133,7 @@ else
     exit 1
 fi
 
-# Step 6: Check service status
+# Step 7: Check service status
 print_status "Checking service status..."
 echo "----------------------------------------"
 sudo systemctl status "$SERVICE_NAME.service" --no-pager
