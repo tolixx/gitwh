@@ -5,6 +5,7 @@ import (
 	"gitwh/puller/git"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestNewHandler(t *testing.T) {
@@ -68,5 +69,25 @@ func TestNewHandlerIntegration(t *testing.T) {
 	
 	if handler == nil {
 		t.Error("Expected handler to be created with git puller")
+	}
+}
+func TestHooksFromConfig(t *testing.T) {
+	cfg := &config.Config{Repos: map[string]config.Repo{
+		"a": {Folders: []string{"/srv/a1", "/srv/a2"}, AfterPull: "make", AfterPullTimeout: 30},
+		"b": {Folders: []string{"/srv/b"}, AfterPull: "ls"},
+		"c": {Folders: []string{"/srv/c"}},
+	}}
+	h := hooks(cfg)
+	if len(h) != 3 {
+		t.Fatalf("got %d hooks, want 3: %+v", len(h), h)
+	}
+	if h["/srv/a2"].Command != "make" || h["/srv/a2"].Timeout != 30*time.Second || h["/srv/a2"].Repo != "a" {
+		t.Errorf("a2: %+v", h["/srv/a2"])
+	}
+	if h["/srv/b"].Timeout != config.DefaultAfterPullTimeout*time.Second {
+		t.Errorf("b default timeout: %+v", h["/srv/b"])
+	}
+	if _, ok := h["/srv/c"]; ok {
+		t.Error("c has no after_pull")
 	}
 }

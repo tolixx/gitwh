@@ -12,12 +12,19 @@ import (
 const defaultBufferSize = 3
 const defaultTimeout = 10
 
+// DefaultAfterPullTimeout is the after_pull limit when the repo sets none
+const DefaultAfterPullTimeout = 300
+
 // Repo represents repository
 type Repo struct {
 	Secret string `json:"secret" yaml:"secret"`
 	// Branch, when set, limits pulls to pushes on this branch
 	Branch  string   `json:"branch" yaml:"branch"`
 	Folders []string `json:"folders" yaml:"folders"`
+	// AfterPull is a shell command run in each folder after a pull that brought new commits
+	AfterPull string `json:"after_pull" yaml:"after_pull"`
+	// AfterPullTimeout in seconds, defaults to DefaultAfterPullTimeout
+	AfterPullTimeout int `json:"after_pull_timeout" yaml:"after_pull_timeout"`
 }
 
 // Config represents configuration for Webhook
@@ -84,9 +91,21 @@ func (c *Config) validate() error {
 	if c.BufferSize < 0 {
 		return fmt.Errorf("buffer_size must not be negative, got %d", c.BufferSize)
 	}
+	hooked := make(map[string]string)
 	for name, repo := range c.Repos {
+		if repo.AfterPull != "" {
+			for _, folder := range repo.Folders {
+				if other, ok := hooked[folder]; ok {
+					return fmt.Errorf("folder %s has after_pull in both %q and %q", folder, other, name)
+				}
+				hooked[folder] = name
+			}
+		}
 		if len(repo.Folders) == 0 {
 			return fmt.Errorf("repo %q has no folders", name)
+		}
+		if repo.AfterPullTimeout < 0 {
+			return fmt.Errorf("repo %q: after_pull_timeout must not be negative", name)
 		}
 	}
 	return nil
